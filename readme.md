@@ -10,6 +10,7 @@
 * **봇 API (Telegram API):** `pyTelegramBotAPI (telebot)`
 * **LLM 클라이언트 (LLM Client):** `OpenAI Python Client` (v2.41.0+)
 * **환경 변수 관리 (Config):** `python-dotenv`
+* **검색 라이브러리 (Search Library):** `duckduckgo-search` (실시간 인터넷 검색 연동)
 * **로컬 LLM 백엔드 (Backend):** `LM Studio` (v1.x, 포트 1974번 연동)
 
 ---
@@ -18,9 +19,11 @@
 
 1. **실시간 답변 스트리밍 (Real-time Streaming):**
    * 답변 전체가 완성될 때까지 기다리지 않고, 실시간으로 답변이 출력되는 과정을 타이핑 효과와 함께 볼 수 있습니다.
-2. **활성화 모델 조회:**
+2. **실시간 웹 검색 (Tool Calling / Function Calling):**
+   * 실시간 정보나 최신 뉴스를 물어볼 경우, LLM이 판단하여 DuckDuckGo 검색엔진에서 정보를 긁어와 종합적으로 신뢰도 높은 답변을 내놓습니다.
+3. **활성화 모델 조회:**
    * `/model` 명령어를 통해 현재 LM Studio 로컬 서버에 활성화되어 로드된 LLM 모델의 이름을 실시간으로 조회할 수 있습니다.
-3. **가볍고 빠른 한국어 최적화:**
+4. **가볍고 빠른 한국어 최적화:**
    * Qwen 3.5 및 Llama 등 최신 로컬 GGUF 모델과 유기적으로 연동됩니다.
 
 ---

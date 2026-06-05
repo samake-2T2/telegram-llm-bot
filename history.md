@@ -16,3 +16,12 @@
 * **상세 작업:**
   * LM Studio 환경에 맞춤화된 `Qwen_Qwen3.5-9B-Q4_K_M.gguf` 모델을 허깅페이스로부터 다운로드 연동 완료.
   * Apple Silicon Mac 기기에서 속도를 극대화할 수 있는 Metal GPU Offload 활성화 가이드 제공.
+
+### 3. 실시간 웹 검색(Tool Calling) 연동
+* **배경:** 로컬 LLM의 데이터 컷오프(Cut-off) 한계 극복 및 최신 정보/뉴스/날씨 등 실시간 질문 대응 필요.
+* **해당 파일:** [bot.py](file:///Users/2t2/Desktop/개인/telegram-llm-bot/bot.py), [requirements.txt](file:///Users/2t2/Desktop/개인/telegram-llm-bot/requirements.txt)
+* **상세 작업:**
+  * 무료 웹 검색 패키지인 `duckduckgo-search` 연동.
+  * OpenAI API의 Function Calling (`tools`) 규격을 사용해 LLM에 `search_web` 검색 함수 제공.
+  * 1단계 툴 호출 판별(`stream=False`)을 통해 검색이 필요한지 판단 후, 검색 결과가 존재하면 2단계 최종 생성에서 결합하여 스트리밍(`stream=True`)으로 전달하도록 설계.
+  * 툴 호출 미지원 구버전 모델에 대한 fallback(예외) 우회 구문 탑재.
