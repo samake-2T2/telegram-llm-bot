@@ -106,8 +106,11 @@ def handle_message(message):
         }
     ]
     
+    # 기본 모델 표시용 변수
+    used_model = "local-model"
+    
     messages = [
-        {"role": "system", "content": "당신은 개발 및 코딩뿐만 아니라 실시간 정보도 검색하여 친절하게 알려주는 AI 어시스턴트입니다. 항상 한국어로 친절하게 답변해 주세요."},
+        {"role": "system", "content": "당신은 개발 및 코딩뿐만 아니라 실시간 정보도 검색하여 친절하게 알려주는 AI 어시스턴트입니다. 항상 한국어로 친절하게 답변해 주세요. 특히 웹 검색 결과를 기반으로 답변할 때는 실시간 기온, 강수 확률, 뉴스 핵심 팩트 등 구체적인 숫자 수치 정보를 생략하지 말고 모두 상세히 본문에 포함하여 답변해 주십시오."},
         {"role": "user", "content": user_text}
     ]
 
@@ -121,6 +124,8 @@ def handle_message(message):
                 tool_choice="auto",
                 temperature=0.7
             )
+            # 사용된 실제 구동 모델명 발췌
+            used_model = getattr(response, "model", "local-model")
             response_message = response.choices[0].message
             tool_calls = response_message.tool_calls
         except Exception as tool_err:
@@ -196,7 +201,6 @@ def handle_message(message):
             )
         elif response_message and response_message.content:
             # 툴을 타지 않고 바로 일반 답변이 나온 경우 1차 응답 바로 전송 후 리턴
-            used_model = "local-model"
             final_text = f"{response_message.content}\n\n🤖 [Model: {used_model}]"
             bot.edit_message_text(
                 chat_id=message.chat.id,
@@ -236,7 +240,6 @@ def handle_message(message):
                         except Exception:
                             pass
         
-        used_model = "local-model"
         final_text = f"{full_reply}\n\n🤖 [Model: {used_model}]"
         
         bot.edit_message_text(
