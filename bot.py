@@ -164,78 +164,86 @@ def handle_message(message):
         last_update_time = time.time()
         
         has_tool_call = False
+        native_tool_call_name = None
+        native_tool_call_args = ""
         
         # 1차 스트리밍 감시 루프
         for chunk in response:
-            if chunk.choices and chunk.choices[0].delta.content:
-                content_chunk = chunk.choices[0].delta.content
-                full_reply += content_chunk
+            if chunk.choices:
+                delta = chunk.choices[0].delta
                 
                 # 모델명 정보 업데이트
                 if hasattr(chunk, "model") and chunk.model:
                     used_model = chunk.model
                 
-                # 툴 호출 태그 시작 감지
-                if "<tool_call>" in full_reply and not has_tool_call:
+                # 네이티브 툴 콜 감지
+                if getattr(delta, "tool_calls", None):
                     has_tool_call = True
-                    # 태그 텍스트 노출 차단을 위해 대기 안내로 화면 업데이트 차단
-                    bot.edit_message_text(
-                        chat_id=message.chat.id,
-                        message_id=sent_message.message_id,
-                        text="💬 검색이 필요하여 도구를 가동하고 있습니다..."
-                    )
+                    tc = delta.tool_calls[0]
+                    if getattr(tc, "function", None):
+                        if getattr(tc.function, "name", None):
+                            native_tool_call_name = tc.function.name
+                        if getattr(tc.function, "arguments", None):
+                            native_tool_call_args += tc.function.arguments
+                            
+                    try:
+                        bot.edit_message_text(chat_id=message.chat.id, message_id=sent_message.message_id, text="💬 검색이 필요하여 도구를 가동하고 있습니다...")
+                    except Exception: pass
+
+                # 텍스트 스트리밍 감지
+                if getattr(delta, "content", None):
+                    content_chunk = delta.content
+                    full_reply += content_chunk
+                    
+                    if "<tool_call>" in full_reply and not has_tool_call:
+                        has_tool_call = True
+                        try:
+                            bot.edit_message_text(chat_id=message.chat.id, message_id=sent_message.message_id, text="💬 검색이 필요하여 도구를 가동하고 있습니다...")
+                        except Exception: pass
                 
-                # 툴 호출 태그 완료 감지
-                if has_tool_call and "</tool_call>" in full_reply:
-                    text_tool_call = parse_text_tool_calls(full_reply)
-                    if text_tool_call:
-                        function_name = text_tool_call["name"]
-                        function_args = text_tool_call["arguments"]
-                        
-                        if function_name == "search_web":
-                            search_query = function_args.get("query")
-                            bot.edit_message_text(
-                                chat_id=message.chat.id,
-                                message_id=sent_message.message_id,
-                                text=f"🔍 '{search_query}'에 대해 웹 검색 중..."
-                            )
-                            
-                            # 검색 실행
-                            search_result = search_web(search_query)
-                            
-                            # 툴 호출 및 응답 결과 히스토리 병합
-                            messages.append({"role": "assistant", "content": full_reply})
-                            messages.append({
-                                "role": "user",
-                                "content": f"도구(search_web) 검색 결과:\n{search_result}\n\n위 검색 결과를 바탕으로 사용자의 질문에 한국어로 명확하게 답변해 주세요. 정보가 부족하다면 추측하지 말고 검색된 내용 안에서만 답변하십시오."
-                            })
-                            
-                            # 검색 완료 알림
-                            bot.edit_message_text(
-                                chat_id=message.chat.id,
-                                message_id=sent_message.message_id,
-                                text="💬 검색 결과를 종합하여 답변을 정리하고 있습니다..."
-                            )
-                            break # 1차 스트리밍 탈출 및 2단계 생성으로 진행
-                    else:
-                        # 파싱이 안 되었거나 오탐일 경우 일반 텍스트로 복귀
-                        has_tool_call = False
-                
-                # 일반 대화 스트리밍 전송 (툴 콜이 감지되지 않았을 때만 화면 갱신)
+                # 툴 콜이 아닐 때만 화면 갱신
                 if not has_tool_call:
                     current_time = time.time()
                     if current_time - last_update_time > update_interval:
                         if full_reply.strip() and full_reply != last_updated_text:
                             try:
-                                bot.edit_message_text(
-                                    chat_id=message.chat.id,
-                                    message_id=sent_message.message_id,
-                                    text=full_reply + " ✍️..."
-                                )
+                                bot.edit_message_text(chat_id=message.chat.id, message_id=sent_message.message_id, text=full_reply + " ✍️...")
                                 last_updated_text = full_reply
                                 last_update_time = current_time
-                            except Exception:
-                                pass
+                            except Exception: pass
+
+        # 1단계 스트리밍 종료 후 툴 콜 실행 판단
+        if has_tool_call:
+            function_name = None
+            function_args = {}
+            
+            if native_tool_call_name:
+                function_name = native_tool_call_name
+                try:
+                    function_args = json.loads(native_tool_call_args)
+                except Exception:
+                    function_args = {"query": native_tool_call_args}
+            else:
+                text_tool_call = parse_text_tool_calls(full_reply)
+                if text_tool_call:
+                    function_name = text_tool_call["name"]
+                    function_args = text_tool_call["arguments"]
+                    
+            if function_name == "search_web":
+                search_query = function_args.get("query", "오늘 날씨")
+                bot.edit_message_text(chat_id=message.chat.id, message_id=sent_message.message_id, text=f"🔍 '{search_query}'에 대해 웹 검색 중...")
+                
+                search_result = search_web(search_query)
+                
+                messages.append({"role": "assistant", "content": full_reply})
+                messages.append({
+                    "role": "user",
+                    "content": f"도구(search_web) 검색 결과:\n{search_result}\n\n위 검색 결과를 바탕으로 사용자의 질문에 한국어로 명확하게 답변해 주세요. 정보가 부족하다면 추측하지 말고 검색된 내용 안에서만 답변하십시오."
+                })
+                
+                bot.edit_message_text(chat_id=message.chat.id, message_id=sent_message.message_id, text="💬 검색 결과를 종합하여 답변을 정리하고 있습니다...")
+            else:
+                has_tool_call = False
 
         # 2단계: 툴 콜을 실행했던 경우, 검색 결과 기반으로 2차 최종 답변 스트리밍 수행
         if has_tool_call:
