@@ -3,6 +3,7 @@ import time
 import json
 import re
 import telebot
+from datetime import datetime
 from openai import OpenAI
 from dotenv import load_dotenv
 from duckduckgo_search import DDGS
@@ -48,7 +49,7 @@ def parse_text_tool_calls(content: str):
 
 # 최종 답변 내 잔여 시스템 태그 클리닝 헬퍼 함수
 def clean_tool_tags(text: str) -> str:
-    """답변 내에 남아있는 <tool_call>이나 <tool_response> 등의 시스템 태그를 모두 제거합니다."""
+    """답변 내에 남아있는 <tool_call>이나 <tool_call> 등의 시스템 태그를 모두 제거합니다."""
     # <tool_call>...</tool_call> 패턴 제거
     text = re.sub(r"<tool_call>.*?</tool_call>", "", text, flags=re.DOTALL)
     # <tool_response>...</tool_response> 패턴 제거
@@ -120,8 +121,14 @@ def handle_message(message):
     # 기본 모델 표시용 변수
     used_model = "local-model"
     
+    # 현재 날짜 및 시각 구하기
+    current_time_str = datetime.now().strftime("%Y년 %m월 %d일 %H시 %M분")
+    
     messages = [
-        {"role": "system", "content": "당신은 개발 및 코딩뿐만 아니라 실시간 정보도 검색하여 친절하게 알려주는 AI 어시스턴트입니다. 항상 한국어로 친절하게 답변해 주세요. 특히 웹 검색 결과를 기반으로 답변할 때는 실시간 기온, 강수 확률, 뉴스 핵심 팩트 등 구체적인 숫자 수치 정보를 생략하지 말고 모두 상세히 본문에 포함하여 답변해 주십시오."},
+        {
+            "role": "system", 
+            "content": f"당신은 개발 및 코딩뿐만 아니라 실시간 정보도 검색하여 친절하게 알려주는 AI 어시스턴트입니다. 항상 한국어로 친절하게 답변해 주세요. 특히 웹 검색 결과를 기반으로 답변할 때는 실시간 기온, 강수 확률, 뉴스 핵심 팩트 등 구체적인 숫자 수치 정보를 생략하지 말고 모두 상세히 본문에 포함하여 답변해 주십시오.\n\n[현재 시스템 일시: {current_time_str}]"
+        },
         {"role": "user", "content": user_text}
     ]
 
