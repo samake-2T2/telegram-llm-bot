@@ -127,7 +127,13 @@ def handle_message(message):
     messages = [
         {
             "role": "system", 
-            "content": f"당신은 개발 및 코딩뿐만 아니라 실시간 정보도 검색하여 친절하게 알려주는 AI 어시스턴트입니다. 항상 한국어로 친절하게 답변해 주세요. 특히 웹 검색 결과를 기반으로 답변할 때는 실시간 기온, 강수 확률, 뉴스 핵심 팩트 등 구체적인 숫자 수치 정보를 생략하지 말고 모두 상세히 본문에 포함하여 답변해 주십시오.\n\n[현재 시스템 일시: {current_time_str}]"
+            "content": (
+                "당신은 실시간 정보를 검색하여 답변하는 AI 어시스턴트입니다.\n"
+                f"현재 시스템 일시는 [{current_time_str}] 입니다. 모든 시간/날짜 기준은 이 일시를 따르며, 절대 과거 연도(예: 2024년)로 착각하거나 임의로 지어내지 마십시오.\n"
+                "항상 한국어로만 답변하고, 도구 호출 시 검색어(query)도 반드시 한국어로 작성하십시오. 한자(중국어)를 절대 사용하지 마십시오.\n"
+                "웹 검색 결과를 바탕으로 답변할 때는 실시간 기온, 강수 확률 등 구체적인 수치를 생략 없이 상세히 포함하십시오.\n"
+                "만약 검색 결과에 날씨 등의 정확한 정보가 부족하다면, 임의로 추측(환각)하지 말고 '현재 검색 결과로는 정확한 수치를 확인하기 어렵다'고 사실대로 말하십시오."
+            )
         },
         {"role": "user", "content": user_text}
     ]
@@ -200,10 +206,8 @@ def handle_message(message):
                             # 툴 호출 및 응답 결과 히스토리 병합
                             messages.append({"role": "assistant", "content": full_reply})
                             messages.append({
-                                "role": "tool",
-                                "tool_call_id": "call_text_search",
-                                "name": function_name,
-                                "content": search_result
+                                "role": "user",
+                                "content": f"도구(search_web) 검색 결과:\n{search_result}\n\n위 검색 결과를 바탕으로 사용자의 질문에 한국어로 명확하게 답변해 주세요. 정보가 부족하다면 추측하지 말고 검색된 내용 안에서만 답변하십시오."
                             })
                             
                             # 검색 완료 알림
