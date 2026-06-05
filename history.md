@@ -25,3 +25,11 @@
   * OpenAI API의 Function Calling (`tools`) 규격을 사용해 LLM에 `search_web` 검색 함수 제공.
   * 1단계 툴 호출 판별(`stream=False`)을 통해 검색이 필요한지 판단 후, 검색 결과가 존재하면 2단계 최종 생성에서 결합하여 스트리밍(`stream=True`)으로 전달하도록 설계.
   * 툴 호출 미지원 구버전 모델에 대한 fallback(예외) 우회 구문 탑재.
+
+### 4. XML 형태 툴 호출 강제 파싱 버그 수정 (Fallback Parsing)
+* **배경:** Qwen 계열 등 일부 로컬 LLM이 OpenAI 표준 `tool_calls` JSON 규격 대신 답변 텍스트 내에 직접 XML 스타일(`<tool_call>...</tool_call>`)로 툴을 호출하는 비표준 응답 포맷을 뱉어 봇이 오동작하는 문제 해결.
+* **해당 파일:** [bot.py](file:///Users/2t2/Desktop/개인/telegram-llm-bot/bot.py)
+* **상세 작업:**
+  * 정규식 기반 텍스트 툴 호출 파싱기 `parse_text_tool_calls(content)` 함수 개발.
+  * 1차 답변 내에 `<tool_call>` 문자열이 포함될 경우, 강제로 정규식 파싱을 수행하여 툴 이름과 매개변수를 추출해 내도록 보완.
+  * 텍스트 툴 호출도 임의의 `tool_call_id`를 부여하여 OpenAI 규격에 맞게 툴 결과(tool role) 메시지로 히스토리에 병합하는 Fallback 파싱 메커니즘을 확립하여 봇의 동작 강인성 확보.

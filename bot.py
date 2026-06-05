@@ -1,6 +1,7 @@
 import os
 import time
 import json
+import re
 import telebot
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -20,6 +21,30 @@ bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 
 # LM Studio 클라이언트 초기화 (포트 1974 연동)
 client = OpenAI(base_url=LM_STUDIO_API_URL, api_key="lm-studio")
+
+# XML 스타일의 <tool_call> 텍스트 파싱 헬퍼 함수
+def parse_text_tool_calls(content: str):
+    """모델이 출력한 XML 형태의 <tool_call> 텍스트를 파싱하여 함수명과 매개변수를 추출합니다."""
+    try:
+        # function명 추출
+        func_match = re.search(r"<function=(\w+)>", content)
+        if not func_match:
+            return None
+        func_name = func_match.group(1)
+        
+        # parameter 추출 (<parameter=name>value</parameter>)
+        param_matches = re.findall(r"<parameter=(\w+)>\s*(.*?)\s*</parameter>", content, re.DOTALL)
+        args = {}
+        for param_name, param_value in param_matches:
+            args[param_name] = param_value.strip()
+            
+        return {
+            "name": func_name,
+            "arguments": args
+        }
+    except Exception as e:
+        print(f"텍스트 기반 툴 콜 파싱 실패: {str(e)}")
+        return None
 
 # 웹 검색 함수 정의
 def search_web(query: str, max_results: int = 5) -> str:
@@ -104,13 +129,45 @@ def handle_message(message):
             tool_calls = None
             response_message = None
 
+        # 텍스트 기반 툴 콜 강제 파싱 체크 (Qwen 등 일부 로컬 모델 대응)
+        text_tool_call = None
+        if not tool_calls and response_message and response_message.content:
+            if "<tool_call>" in response_message.content:
+                text_tool_call = parse_text_tool_calls(response_message.content)
+
         # 2단계: 툴 호출 처리
-        if tool_calls:
-            messages.append(response_message)
-            
-            for tool_call in tool_calls:
-                function_name = tool_call.function.name
-                function_args = json.loads(tool_call.function.arguments)
+        if tool_calls or text_tool_call:
+            if tool_calls:
+                messages.append(response_message)
+                
+                for tool_call in tool_calls:
+                    function_name = tool_call.function.name
+                    function_args = json.loads(tool_call.function.arguments)
+                    
+                    if function_name == "search_web":
+                        search_query = function_args.get("query")
+                        bot.edit_message_text(
+                            chat_id=message.chat.id,
+                            message_id=sent_message.message_id,
+                            text=f"🔍 '{search_query}'에 대해 웹 검색 중..."
+                        )
+                        
+                        # 검색 실행
+                        search_result = search_web(search_query)
+                        
+                        # 툴 결과 추가
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "name": function_name,
+                            "content": search_result
+                        })
+            elif text_tool_call:
+                # 텍스트 기반 툴 콜도 히스토리에 포함
+                messages.append(response_message)
+                
+                function_name = text_tool_call["name"]
+                function_args = text_tool_call["arguments"]
                 
                 if function_name == "search_web":
                     search_query = function_args.get("query")
@@ -123,10 +180,10 @@ def handle_message(message):
                     # 검색 실행
                     search_result = search_web(search_query)
                     
-                    # 툴 결과 추가
+                    # 툴 결과 추가 (tool_call_id가 없으므로 임의 지정)
                     messages.append({
                         "role": "tool",
-                        "tool_call_id": tool_call.id,
+                        "tool_call_id": "call_text_search",
                         "name": function_name,
                         "content": search_result
                     })
