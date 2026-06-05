@@ -1,4 +1,5 @@
 import os
+import time
 import telebot
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -39,10 +40,11 @@ def show_model_info(message):
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     user_text = message.text
-    bot.send_chat_action(message.chat.id, 'typing')
+    # 사용자에게 진행 상황을 알리는 대기 메시지 전송
+    sent_message = bot.reply_to(message, "💬 답변을 생성하는 중입니다...")
     
     try:
-        # 로컬 서버(포트 1974)에 연결하여 답변 요청
+        # 로컬 서버(포트 1974)에 연결하여 답변 요청 (스트리밍 활성화)
         response = client.chat.completions.create(
             model="local-model", # 로드된 모델이 자동 선택됩니다.
             messages=[
@@ -50,16 +52,50 @@ def handle_message(message):
                 {"role": "user", "content": user_text}
             ],
             temperature=0.7,
+            stream=True
         )
         
-        reply_content = response.choices[0].message.content
-        # 응답을 생성한 모델명 확인
-        used_model = getattr(response, "model", "알 수 없는 모델")
-        full_reply = f"{reply_content}\n\n🤖 [Model: {used_model}]"
-        bot.reply_to(message, full_reply)
+        full_reply = ""
+        last_updated_text = ""
+        update_interval = 1.0  # 텔레그램 Rate Limit을 피하기 위한 1초 업데이트 주기
+        last_update_time = time.time()
+        
+        for chunk in response:
+            if chunk.choices and chunk.choices[0].delta.content:
+                full_reply += chunk.choices[0].delta.content
+                
+                # 1초 주기마다 메시지 수정
+                current_time = time.time()
+                if current_time - last_update_time > update_interval:
+                    if full_reply.strip() and full_reply != last_updated_text:
+                        try:
+                            bot.edit_message_text(
+                                chat_id=message.chat.id,
+                                message_id=sent_message.message_id,
+                                text=full_reply + " ✍️..."
+                            )
+                            last_updated_text = full_reply
+                            last_update_time = current_time
+                        except Exception:
+                            # 동일 텍스트 업데이트 등으로 인한 에러 무시
+                            pass
+        
+        # 응답 완료 후 최종 메시지 업데이트
+        used_model = "local-model"
+        final_text = f"{full_reply}\n\n🤖 [Model: {used_model}]"
+        
+        bot.edit_message_text(
+            chat_id=message.chat.id,
+            message_id=sent_message.message_id,
+            text=final_text
+        )
         
     except Exception as e:
-        bot.reply_to(message, f"로컬 LLM 응답 실패 (포트 1974번 연결 확인 필요): {str(e)}")
+        bot.edit_message_text(
+            chat_id=message.chat.id,
+            message_id=sent_message.message_id,
+            text=f"로컬 LLM 응답 실패 (포트 1974번 연결 확인 필요): {str(e)}"
+        )
 
 if __name__ == "__main__":
     print(f"로컬 LLM API 주소: {LM_STUDIO_API_URL}")
